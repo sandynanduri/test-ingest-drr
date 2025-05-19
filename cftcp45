@@ -1,0 +1,92 @@
+import cdm.base.staticdata.party.CounterpartyRoleEnum;
+import cdm.base.staticdata.party.metafields.ReferenceWithMetaParty;
+import com.google.inject.Guice;
+import com.google.inject.Injector;
+import com.regnosys.drr.DrrRuntimeModuleExternalApi;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.regnosys.rosetta.common.serialisation.RosettaObjectMapper;
+import com.regnosys.rosetta.common.hashing.ReferenceResolverProcessStep;
+import drr.enrichment.common.trade.functions.Create_TransactionReportInstruction;
+import drr.regulation.cftc.rewrite.CFTCPart45TransactionReport;
+import drr.regulation.cftc.rewrite.reports.CFTCPart45ReportFunction;
+import drr.regulation.common.ReportableEvent;
+import drr.regulation.common.ReportingSide;
+import drr.regulation.common.TransactionReportInstruction;
+import drr.regulation.common.functions.ExtractTradeCounterparty;
+import org.isda.cdm.processor.CdmReferenceConfig;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+public class CFTCPart45Generator {
+
+    public static void main(String[] args) throws IOException {
+        if (args.length < 1) {
+            System.out.println("Usage: java CFTCPart45Generator <cdm-json-file-path> [output-file-path]");
+            System.exit(1);
+        }
+        
+        String inputFilePath = args[0];
+        String outputFilePath = args.length > 1 ? args[1] : "cftc-p45-report.json";
+        
+        // Read the CDM JSON file
+        String cdmJson = new String(Files.readAllBytes(Paths.get(inputFilePath)));
+        
+        // Create the ObjectMapper for JSON serialization/deserialization
+        ObjectMapper mapper = RosettaObjectMapper.getNewRosettaObjectMapper();
+        
+        // Deserialize the CDM JSON into a ReportableEvent
+        ReportableEvent reportableEvent = mapper.readValue(cdmJson, ReportableEvent.class);
+        
+        // Resolve references in the event
+        reportableEvent = resolveReferences(reportableEvent);
+        
+        // Run the report generation
+        CFTCPart45Generator generator = new CFTCPart45Generator();
+        CFTCPart45TransactionReport report = generator.generateReport(reportableEvent);
+        
+        // Write the report to the output file
+        mapper.writerWithDefaultPrettyPrinter()
+              .writeValue(new File(outputFilePath), report);
+        
+        System.out.println("CFTC P45 report generated successfully at: " + outputFilePath);
+    }
+    
+    private final Injector injector;
+    
+    public CFTCPart45Generator() {
+        this.injector = Guice.createInjector(new DrrRuntimeModuleExternalApi());
+    }
+    
+    public CFTCPart45TransactionReport generateReport(ReportableEvent reportableEvent) throws IOException {
+        // Create reporting side information
+        // Assuming PARTY_1 is the reporting party and PARTY_2 is the reporting counterparty
+        final ReportingSide reportingSide = ReportingSide.builder()
+                .setReportingParty(getCounterparty(reportableEvent, CounterpartyRoleEnum.PARTY_1))
+                .setReportingCounterparty(getCounterparty(reportableEvent, CounterpartyRoleEnum.PARTY_2))
+                .build();
+        
+        // Create transaction report instruction
+        final Create_TransactionReportInstruction createInstructionFunc = 
+                injector.getInstance(Create_TransactionReportInstruction.class);
+        final TransactionReportInstruction reportInstruction = 
+                createInstructionFunc.evaluate(reportableEvent, reportingSide);
+        
+        // Generate the CFTC Part 45 report
+        final CFTCPart45ReportFunction reportFunc = injector.getInstance(CFTCPart45ReportFunction.class);
+        return reportFunc.evaluate(reportInstruction);
+    }
+    
+    private ReferenceWithMetaParty getCounterparty(ReportableEvent reportableEvent, CounterpartyRoleEnum party) {
+        ExtractTradeCounterparty func = injector.getInstance(ExtractTradeCounterparty.class);
+        return func.evaluate(reportableEvent, party).getPartyReference();
+    }
+    
+    private static <T extends com.rosetta.model.lib.RosettaModelObject> T resolveReferences(T object) {
+        com.rosetta.model.lib.RosettaModelObject builder = object.toBuilder();
+        new ReferenceResolverProcessStep(CdmReferenceConfig.get()).runProcessStep(builder.getType(), builder);
+        return (T) builder.build();
+    }
+}
