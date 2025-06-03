@@ -1,0 +1,78 @@
+package org.finos.cdm.example;
+
+import cdm.base.staticdata.party.Party;
+import cdm.base.staticdata.party.Counterparty;
+import cdm.event.common.TradeState;
+import cdm.event.common.ExecutionInstruction;
+import cdm.event.common.PrimitiveInstruction;
+import cdm.event.common.Instruction;
+import cdm.event.workflow.EventInstruction;
+import cdm.event.common.BusinessEvent;
+import cdm.event.workflow.WorkflowStep;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.regnosys.rosetta.common.serialisation.RosettaObjectMapper;
+
+import java.util.List;
+
+public class TradeExecutionWorkflowSkeleton {
+    public static void main(String[] args) throws Exception {
+        // 1. Raw Trade Data (Python Dict -> JSON -> Java Map or POJO)
+        // For this skeleton, assume you have a Java object or Map<String, Object> representing the trade
+        // Map<String, Object> rawTradeData = ...;
+
+        // 2. TradeState (Your trade in CDM format)
+        TradeState tradeState = TradeState.builder()
+            // .setTrade(...)
+            // .setState(...)
+            .build();
+
+        // 3. ExecutionInstruction (What to execute)
+        ExecutionInstruction executionInstruction = ExecutionInstruction.builder()
+            // .setProduct(...)
+            // .setPriceQuantity(...)
+            // .setCounterparty(...)
+            // .setParties(...)
+            // .setTradeDate(...)
+            // .setTradeIdentifier(...)
+            .build();
+
+        // 4. PrimitiveInstruction (How to execute)
+        PrimitiveInstruction primitiveInstruction = PrimitiveInstruction.builder()
+            .setExecution(executionInstruction)
+            .build();
+
+        // 5. Instruction (What + Current State)
+        Instruction instruction = Instruction.builder()
+            .setBeforeValue(tradeState)
+            .setPrimitiveInstruction(primitiveInstruction)
+            .build();
+
+        // 6. EventInstruction (What + When + Why)
+        EventInstruction eventInstruction = EventInstruction.builder()
+            .addInstruction(instruction)
+            // .setIntent(...)
+            // .setEventDate(...)
+            .build();
+
+        // 7. BusinessEvent (The actual execution result)
+        BusinessEvent businessEvent = BusinessEvent.builder()
+            .setEventQualifier("Execution")
+            .addInstruction(instruction)
+            // .setEventDate(...)
+            // .addAfter(...)
+            .build();
+
+        // 8. WorkflowStep (Complete audit trail + BusinessEvent)
+        WorkflowStep workflowStep = WorkflowStep.builder()
+            .setBusinessEvent(businessEvent)
+            // .addTimestamp(...)
+            // .addEventIdentifier(...)
+            // .setAction(...)
+            .build();
+
+        // (Optional) Serialize to JSON for DRR or downstream
+        ObjectMapper mapper = RosettaObjectMapper.getNewRosettaObjectMapper();
+        String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(workflowStep);
+        System.out.println(json);
+    }
+}
