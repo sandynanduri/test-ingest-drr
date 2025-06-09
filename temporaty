@@ -1,0 +1,46 @@
+Here's your detailed analysis converted into a clean and comprehensive table, grouped by **Regulator**, **Report Type**, **Primary Format**, **Projection Formats**, and **Pipelines**:
+
+---
+
+### 🗂️ **Supported Regulations – Report Types and Output Formats**
+
+| Regulator            | Report Type             | Primary Format | Projection Format(s)    | Pipelines                                                                                          |
+| -------------------- | ----------------------- | -------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
+| **CFTC (US)**        | Part 45 (Transaction)   | JSON           | —                       | `pipeline-report-cftc-part45`                                                                      |
+|                      | Part 43 (Dissemination) | JSON           | —                       | `pipeline-report-cftc-part43`                                                                      |
+| **ESMA (EU EMIR)**   | Trade                   | JSON           | ISO 20022               | `pipeline-report-esma-emir-trade`, `pipeline-projection-esma-emir-trade-report-to-iso20022`        |
+|                      | Margin                  | JSON           | ISO 20022               | `pipeline-report-esma-emir-margin`, `pipeline-projection-esma-emir-margin-report-to-iso20022`      |
+| **FCA (UK EMIR)**    | Trade                   | JSON           | ISO 20022               | `pipeline-report-fca-ukemir-trade`, `pipeline-projection-fca-uk-emir-trade-report-to-iso20022`     |
+|                      | Margin                  | JSON           | ISO 20022               | `pipeline-report-fca-ukemir-margin`, `pipeline-projection-fca-uk-emir-margin-report-to-iso20022`   |
+| **ASIC (Australia)** | Trade                   | JSON           | ISO 20022               | `pipeline-report-asic-trade`, `pipeline-projection-asic-trade-report-to-iso20022`                  |
+|                      | Margin                  | JSON           | ISO 20022               | `pipeline-report-asic-margin`, `pipeline-projection-asic-margin-report-to-iso20022`                |
+|                      | Valuation               | JSON           | ISO 20022               | `pipeline-report-asic-valuation`, `pipeline-projection-asic-valuation-report-to-iso20022`          |
+| **MAS (Singapore)**  | Trade                   | JSON           | ISO 20022               | `pipeline-report-mas-trade`, `pipeline-projection-mas-trade-report-to-iso20022`                    |
+|                      | Margin                  | JSON           | ISO 20022               | `pipeline-report-mas-margin`, `pipeline-projection-mas-margin-report-to-iso20022`                  |
+|                      | Valuation               | JSON           | ISO 20022               | `pipeline-report-mas-valuation`, `pipeline-projection-mas-valuation-report-to-iso20022`            |
+| **JFSA (Japan)**     | Trade                   | JSON           | ISO 20022               | `pipeline-report-jfsa-trade`, `pipeline-projection-jfsa-rewrite-trade-report-to-iso20022`          |
+|                      | Margin                  | JSON           | ISO 20022               | `pipeline-report-jfsa-margin`, `pipeline-projection-jfsa-rewrite-margin-report-to-iso20022`        |
+| **HKMA (Hong Kong)** | Trade (DTCC)            | JSON           | ISO 20022               | `pipeline-projection-hkma-dtcc-trade-report-to-iso20022`                                           |
+|                      | Trade (HKMA TR)         | JSON           | ISO 20022               | `pipeline-projection-hkma-tr-trade-report-to-iso20022`                                             |
+|                      | Margin (DTCC)           | JSON           | ISO 20022               | `pipeline-projection-hkma-dtcc-margin-report-to-iso20022`                                          |
+|                      | Margin (HKMA TR)        | JSON           | ISO 20022               | `pipeline-projection-hkma-tr-margin-report-to-iso20022`                                            |
+|                      | Valuation (DTCC)        | JSON           | ISO 20022               | `pipeline-projection-hkma-dtcc-valuation-report-to-iso20022`                                       |
+|                      | Valuation (HKMA TR)     | JSON           | ISO 20022               | `pipeline-projection-hkma-tr-valuation-report-to-iso20022`                                         |
+| **CSA (Canada)**     | Trade                   | JSON           | DTCC RDS Harmonized XML | `pipeline-report-csa-trade`, `pipeline-projection-csa-trade-report-to-dtcc-rds-harmonized`         |
+|                      | PPD                     | JSON           | DTCC RDS Harmonized XML | `pipeline-report-csa-ppd`, `pipeline-projection-csa-ppd-report-to-dtcc-rds-harmonized`             |
+|                      | Valuation               | JSON           | DTCC RDS Harmonized XML | `pipeline-report-csa-valuation`, `pipeline-projection-csa-valuation-report-to-dtcc-rds-harmonized` |
+
+---
+
+### 📌 **Output Format Summary by Regulation**
+
+| Format Type                 | Regulators Supporting It                       |
+| --------------------------- | ---------------------------------------------- |
+| **JSON** (Primary)          | All Regulations                                |
+| **ISO 20022 XML**           | ESMA, FCA, ASIC, MAS, JFSA, HKMA               |
+| **DTCC RDS Harmonized XML** | CSA only                                       |
+| **FpML**                    | ❌ Not used as output (used only for ingestion) |
+
+---
+
+Let me know if you'd like this as an Excel or CSV export!
