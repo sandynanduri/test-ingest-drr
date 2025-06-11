@@ -1,0 +1,362 @@
+package com.regnosys.drr.examples;
+
+import cdm.base.staticdata.identifier.AssignedIdentifier;
+import cdm.base.staticdata.identifier.Identifier;
+import cdm.base.staticdata.identifier.TradeIdentifierTypeEnum;
+import cdm.base.staticdata.party.*;
+import cdm.event.common.*;
+import cdm.event.workflow.EventInstruction;
+import cdm.event.workflow.EventTimestamp;
+import cdm.event.workflow.EventTimestampQualificationEnum;
+import cdm.event.workflow.WorkflowStep;
+import cdm.event.workflow.functions.Create_AcceptedWorkflowStepFromInstruction;
+import cdm.legaldocumentation.common.*;
+import cdm.legaldocumentation.master.MasterAgreementTypeEnum;
+import cdm.legaldocumentation.master.metafields.FieldWithMetaMasterAgreementTypeEnum;
+import com.google.inject.Guice;
+import com.google.inject.Inject;
+import com.google.inject.Injector;
+import com.regnosys.drr.DrrRuntimeModuleExternalApi;
+import com.regnosys.drr.examples.util.ResourcesUtils;
+import com.regnosys.rosetta.common.postprocess.WorkflowPostProcessor;
+import com.rosetta.model.lib.RosettaModelObject;
+import com.rosetta.model.lib.RosettaModelObjectBuilder;
+import com.rosetta.model.lib.records.Date;
+import com.rosetta.model.metafields.FieldWithMetaString;
+import com.rosetta.model.metafields.MetaFields;
+import com.rosetta.model.metafields.FieldWithMetaDate;
+import drr.regulation.common.*;
+import drr.enrichment.common.trade.functions.Create_ReportableEvents;
+import drr.regulation.common.metafields.FieldWithMetaRegimeNameEnum;
+
+import java.io.IOException;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * This class demonstrates how to create CFTC Part 45 reports for new Interest Rate Swap trade executions.
+ * Key features:
+ * - Creates new trade execution WorkflowStep with ContractFormation intent
+ * - Supports various IRS product types (vanilla swaps, basis swaps, OIS, etc.)
+ * - Generates ReportableEvent from WorkflowStep
+ * - Creates CFTC Part 45 Transaction Report with proper field mappings
+ * - Handles all mandatory fields for Interest Rate derivatives
+ * Usage:
+ * - Call generateNewTradeReport() with appropriate parameters
+ * - Or use the main method with predefined examples
+ */
+public class CFTCPart45InterestRateSwapNewTradeGenerator {
+
+    @Inject Create_AcceptedWorkflowStepFromInstruction createWorkflowStep;
+    @Inject Create_ReportableEvents createReportableEvents;
+    @Inject WorkflowPostProcessor postProcessor;
+
+    public static void main(String[] args) throws IOException {
+        // Initialize Guice for dependency injection
+        Injector injector = Guice.createInjector(new DrrRuntimeModuleExternalApi());
+
+        // Get dependency injected instance
+        CFTCPart45InterestRateSwapNewTradeGenerator generator =
+                injector.getInstance(CFTCPart45InterestRateSwapNewTradeGenerator.class);
+
+        // Generate reports for different IRS product types
+        System.out.println("=== Generating CFTC Part 45 Reports for Interest Rate Swaps ===\n");
+
+        // 1. Vanilla USD Fixed-Float Swap
+        generator.generateVanillaUSDSwapReport();
+
+        // 2. EUR OIS (Overnight Index Swap)
+        generator.generateEUROISReport();
+
+        // 3. USD Basis Swap
+        generator.generateUSDBasisSwapReport();
+
+        // 4. Custom IRS from provided trade specification
+        generator.generateCustomIRSReport();
+    }
+
+    /**
+     * Generate CFTC Part 45 report for a Vanilla USD Fixed-Float Interest Rate Swap
+     */
+    public void generateVanillaUSDSwapReport() throws IOException {
+        System.out.println("--- Generating Vanilla USD Fixed-Float Swap Report ---");
+
+        // Load vanilla USD swap sample
+        TradeState baseTradeState = ResourcesUtils.getObjectAndResolveReferences(
+                TradeState.class,
+                "result-json-files/fpml-5-10/products/rates/IR-IRS-Fixed-Float-ex01.json"
+        );
+
+        generateNewTradeReport(
+                baseTradeState,
+                "Vanilla USD Fixed-Float IRS Execution",
+                "VANILLA_USD_IRS_001",
+                createReportingParty("REGNOSYS_BANK", "LEI_REGNOSYS_001"),
+                createCounterparty("EXAMPLE_BANK", "LEI_EXAMPLE_001")
+        );
+    }
+
+    /**
+     * Generate CFTC Part 45 report for EUR Overnight Index Swap (OIS)
+     */
+    public void generateEUROISReport() throws IOException {
+        System.out.println("--- Generating EUR OIS Report ---");
+
+        // Load EUR OIS sample
+        TradeState baseTradeState = ResourcesUtils.getObjectAndResolveReferences(
+                TradeState.class,
+                "result-json-files/fpml-5-10/products/rates/IR-IRS-Fixed-Float-ex06-OIS.json"
+        );
+
+        generateNewTradeReport(
+                baseTradeState,
+                "EUR OIS Execution",
+                "EUR_OIS_001",
+                createReportingParty("EUR_BANK", "LEI_EUR_BANK_001"),
+                createCounterparty("OIS_COUNTERPARTY", "LEI_OIS_CP_001")
+        );
+    }
+
+    /**
+     * Generate CFTC Part 45 report for USD Basis Swap
+     */
+    public void generateUSDBasisSwapReport() throws IOException {
+        System.out.println("--- Generating USD Basis Swap Report ---");
+
+        // Load basis swap sample
+        TradeState baseTradeState = ResourcesUtils.getObjectAndResolveReferences(
+                TradeState.class,
+                "result-json-files/fpml-5-10/products/rates/IR-IRS-Basis-ex01.json"
+        );
+
+        generateNewTradeReport(
+                baseTradeState,
+                "USD Basis Swap Execution",
+                "USD_BASIS_001",
+                createReportingParty("BASIS_DEALER", "LEI_BASIS_DEALER_001"),
+                createCounterparty("BASIS_CLIENT", "LEI_BASIS_CLIENT_001")
+        );
+    }
+
+    /**
+     * Generate CFTC Part 45 report for custom IRS specification
+     */
+    public void generateCustomIRSReport() throws IOException {
+        System.out.println("--- Generating Custom IRS Report ---");
+
+        // Load a sample IRS and customize it
+        TradeState baseTradeState = ResourcesUtils.getObjectAndResolveReferences(
+                TradeState.class,
+                "result-json-files/fpml-5-10/products/rates/USD-Vanilla-swap.json"
+        );
+
+        generateNewTradeReport(
+                baseTradeState,
+                "Custom IRS New Trade Execution",
+                "CUSTOM_IRS_001",
+                createReportingParty("CUSTOM_DEALER", "LEI_CUSTOM_DEALER_001"),
+                createCounterparty("CUSTOM_CLIENT", "LEI_CUSTOM_CLIENT_001")
+        );
+    }
+
+    /**
+     * Core method to generate CFTC Part 45 report for new IRS trade execution
+     */
+    public void generateNewTradeReport(
+            TradeState baseTradeState,
+            String executionDescription,
+            String utiSuffix,
+            Party reportingParty,
+            Party counterparty) throws IOException {
+
+        System.out.println("Processing: " + executionDescription);
+
+        // 1. Create new trade execution instruction
+        WorkflowStep executionInstruction = createNewTradeExecutionInstruction(
+                baseTradeState,
+                utiSuffix,
+                reportingParty,
+                counterparty
+        );
+
+        // 2. Create WorkflowStep with BusinessEvent representing new trade execution
+        WorkflowStep executionWorkflowStep = postProcess(createWorkflowStep.evaluate(executionInstruction));
+
+        // 3. Convert WorkflowStep to ReportableEvent(s)
+        List<? extends ReportableEvent> reportableEvents = createReportableEvents.evaluate(executionWorkflowStep);
+
+        // 4. Add CFTC reporting information
+        List<? extends ReportableEvent> reportableEventsWithInfo =
+                reportableEvents.stream()
+                        .map(reportableEvent -> reportableEvent.toBuilder()
+                                .setReportableInformation(createCFTCReportableInformation(reportingParty))
+                                .build())
+                        .collect(Collectors.toList());
+
+        // 5. Generate and print CFTC Part 45 reports
+        System.out.println("Generated " + reportableEventsWithInfo.size() + " reportable event(s)");
+
+        reportableEventsWithInfo.forEach(reportableEvent -> {
+            try {
+                System.out.println("--- Generating CFTC Part 45 Report ---");
+                CFTCPart45ExampleReport cftcReport = new CFTCPart45ExampleReport();
+                cftcReport.runReport(reportableEvent);
+                System.out.println("Successfully generated CFTC Part 45 report for: " + executionDescription);
+            } catch (IOException e) {
+                System.err.println("Error generating report: " + e.getMessage());
+                throw new RuntimeException(e);
+            }
+        });
+
+        System.out.println();
+    }
+
+    /**
+     * Creates WorkflowStep instruction for new trade execution
+     */
+    private WorkflowStep createNewTradeExecutionInstruction(
+            TradeState baseTradeState,
+            String utiSuffix,
+            Party reportingParty,
+            Party counterparty) {
+
+        // Create instruction for new trade execution
+        Instruction tradeStateInstruction = Instruction.builder()
+                .setBeforeValue(baseTradeState)
+                .setPrimitiveInstruction(PrimitiveInstruction.builder()
+                        .setContractFormation(ContractFormationInstruction.builder()
+                                .addLegalAgreement(LegalAgreement.builder()
+                                        .setLegalAgreementIdentification(LegalAgreementIdentification.builder()
+                                                .setAgreementName(AgreementName.builder()
+                                                        .setAgreementType(LegalAgreementTypeEnum.MASTER_AGREEMENT)
+                                                        .setMasterAgreementType(FieldWithMetaMasterAgreementTypeEnum.builder()
+                                                                .setValue(MasterAgreementTypeEnum.ISDA_MASTER)))
+                                                .setVintage(2002)))));
+
+        // Create a workflow step with event instruction
+        return WorkflowStep.builder()
+                .setProposedEvent(EventInstruction.builder()
+                        .addInstruction(tradeStateInstruction)
+                        .setIntent(EventIntentEnum.CLEARING) // Set intent to CLEARING to indicate intent to clear
+                        .setEventDate(Date.of(2024, 1, 15)))
+                .addTimestamp(EventTimestamp.builder()
+                        .setDateTime(ZonedDateTime.of(Date.of(2024, 1, 15).toLocalDate(), LocalTime.of(9, 0), ZoneOffset.UTC.normalized()))
+                        .setQualification(EventTimestampQualificationEnum.EVENT_CREATION_DATE_TIME))
+                .addEventIdentifier(Identifier.builder()
+                        .addAssignedIdentifier(AssignedIdentifier.builder()
+                                .setIdentifier(FieldWithMetaString.builder()
+                                        .setValue("IRS_EXECUTION_" + utiSuffix))))
+                .build();
+    }
+
+    /**
+     * Creates a new TradeState for execution with updated identifiers and parties
+     */
+    private TradeState createNewTradeStateForExecution(
+            TradeState baseTradeState,
+            String utiSuffix,
+            Party reportingParty,
+            Party counterparty) {
+
+        // Generate new UTI
+        String newUTI = "LEI_REGNOSYS_001_" + utiSuffix + "_" + System.currentTimeMillis();
+
+        return baseTradeState.toBuilder()
+                .setTrade(baseTradeState.getTrade().toBuilder()
+                        .setTradeIdentifier(Collections.singletonList(TradeIdentifier.builder()
+                                .setIdentifierType(TradeIdentifierTypeEnum.UNIQUE_TRANSACTION_IDENTIFIER)
+                                .addAssignedIdentifier(AssignedIdentifier.builder()
+                                        .setIdentifier(FieldWithMetaString.builder()
+                                                .setValue(newUTI)))
+                                .setIssuerValue(reportingParty.getPartyId().get(0).getIdentifier().getValue())))
+                        .setTradeDate(FieldWithMetaDate.builder().setValue(Date.of(2024, 1, 15)))
+                        // Update parties
+                        .setParty(Arrays.asList(reportingParty, counterparty))
+                        // Update counterparties  
+                        .setTradableProduct(baseTradeState.getTrade().getTradableProduct().toBuilder()
+                                .setCounterparty(Arrays.asList(
+                                        Counterparty.builder()
+                                                .setPartyReferenceValue(reportingParty)
+                                                .setRole(CounterpartyRoleEnum.PARTY_1),
+                                        Counterparty.builder()
+                                                .setPartyReferenceValue(counterparty)
+                                                .setRole(CounterpartyRoleEnum.PARTY_2)))))
+                .build();
+    }
+
+    /**
+     * Creates a reporting party with LEI identifier
+     */
+    private Party createReportingParty(String partyName, String leiCode) {
+        return Party.builder()
+                .setMeta(MetaFields.builder().setExternalKey("reportingParty"))
+                .setNameValue(partyName)
+                .addPartyId(PartyIdentifier.builder()
+                        .setIdentifierType(PartyIdentifierTypeEnum.LEI)
+                        .setIdentifierValue(leiCode))
+                .build();
+    }
+
+    /**
+     * Creates counterparty with LEI identifier
+     */
+    private Party createCounterparty(String partyName, String leiCode) {
+        return Party.builder()
+                .setMeta(MetaFields.builder().setExternalKey("counterparty"))
+                .setNameValue(partyName)
+                .addPartyId(PartyIdentifier.builder()
+                        .setIdentifierType(PartyIdentifierTypeEnum.LEI)
+                        .setIdentifierValue(leiCode))
+                .build();
+    }
+
+    /**
+     * Creates CFTC-specific ReportableInformation for Interest Rate Swaps
+     */
+    private ReportableInformation createCFTCReportableInformation(Party reportingParty) {
+        return ReportableInformation.builder()
+                .setConfirmationMethod(ConfirmationMethodEnum.ELECTRONIC) // Electronic confirmation
+                .setExecutionVenueType(ExecutionVenueTypeEnum.SEF) // Swap Execution Facility
+                .setLargeSizeTrade(false) // Not a large size trade
+                .setPartyInformation(Collections.singletonList(
+                        PartyInformation.builder()
+                                .setPartyReferenceValue(reportingParty)
+                                .setRegimeInformation(Collections.singletonList(
+                                        ReportingRegime.builder()
+                                                .setSupervisoryBodyValue(SupervisoryBodyEnum.CFTC)
+                                                .setReportingRole(ReportingRoleEnum.REPORTING_PARTY)
+                                                .setMandatorilyClearable(MandatorilyClearableEnum.PRODUCT_MANDATORY_BUT_NOT_CPTY)
+                                                .setRegimeName(FieldWithMetaRegimeNameEnum.builder()
+                                                        .setValue(RegimeNameEnum.DODD_FRANK_ACT))))))
+                .build();
+    }
+
+    /**
+     * Post-processing the function output, generates keys and runs qualification
+     */
+    @SuppressWarnings("unchecked")
+    private <T extends RosettaModelObject> T postProcess(T object) {
+        RosettaModelObjectBuilder builder = object.toBuilder();
+        postProcessor.postProcess(builder.getType(), builder);
+        return (T) builder;
+    }
+
+    /**
+     * Utility method to print trade summary
+     */
+    private void printTradeSummary(TradeState tradeState) {
+        System.out.println("Trade Summary:");
+        System.out.println("  UTI: " + tradeState.getTrade().getTradeIdentifier().stream()
+                .filter(id -> id.getIdentifierType() == TradeIdentifierTypeEnum.UNIQUE_TRANSACTION_IDENTIFIER)
+                .findFirst()
+                .map(id -> id.getAssignedIdentifier().get(0).getIdentifier().getValue())
+                .orElse("N/A"));
+        System.out.println("  Parties: " + tradeState.getTrade().getParty().size());
+        System.out.println("  Product Type: Interest Rate Derivative");
+    }
+}
