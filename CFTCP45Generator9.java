@@ -32,6 +32,9 @@ import drr.regulation.common.TransactionReportInstruction;
 import drr.regulation.common.ExecutionVenueTypeEnum;
 import drr.regulation.common.ConfirmationMethodEnum;
 import drr.regulation.common.PartyInformation;
+import cdm.base.staticdata.party.Party;
+import cdm.base.staticdata.party.PartyIdentifier;
+import cdm.base.staticdata.party.PartyIdentifierTypeEnum;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -81,38 +84,47 @@ public class CFTCP45Generator {
                 System.out.println("- Proposed Event: " + (event.getOriginatingWorkflowStep().getProposedEvent() != null ? "Present" : "Missing"));
             }
 
-            // Create ReportableInformation using builder
+            // Create party information with dummy values
+            Party party1 = Party.builder()
+                .addPartyId(PartyIdentifier.builder()
+                    .setIdentifier(FieldWithMetaString.builder()
+                        .setValue("DUMMY0000000000LEI01")
+                        .setMeta(MetaFields.builder()
+                            .setScheme("http://www.fpml.org/coding-scheme/external/iso17442")
+                            .build())
+                        .build())
+                    .setIdentifierType(PartyIdentifierTypeEnum.LEI)
+                    .build())
+                .build();
+
+            // Create ReportableInformation with party details
             ReportableInformation.ReportableInformationBuilder reportableInfoBuilder = ReportableInformation.builder()
                 .setExecutionVenueType(ExecutionVenueTypeEnum.OFF_FACILITY)
-                .setConfirmationMethod(ConfirmationMethodEnum.NOT_CONFIRMED);
-            
-            // Create ReportingRegime with CFTC-specific fields
-            ReportingRegime.ReportingRegimeBuilder cftcRegimeInfoBuilder = ReportingRegime.builder()
-                .setRegimeName(FieldWithMetaRegimeNameEnum.builder()
-                    .setValue(RegimeNameEnum.DODD_FRANK_ACT)
-                    .setMeta(MetaFields.builder()
-                        .setScheme("http://www.fpml.org/coding-scheme/external/regime-name")
-                        .build())
-                    .build())
+                .setConfirmationMethod(ConfirmationMethodEnum.NOT_CONFIRMED)
+                .setIntragroup(false);
+
+            // Create PartyInformation
+            PartyInformation.PartyInformationBuilder partyInfoBuilder = PartyInformation.builder()
+                .setPartyReference(ReferenceWithMetaParty.builder()
+                    .setValue(party1)
+                    .build());
+
+            // Create CFTC regime information
+            ReportingRegime.ReportingRegimeBuilder cftcRegimeBuilder = ReportingRegime.builder()
                 .setSupervisoryBody(FieldWithMetaSupervisoryBodyEnum.builder()
                     .setValue(SupervisoryBodyEnum.CFTC)
                     .setMeta(MetaFields.builder()
                         .setScheme("http://www.fpml.org/coding-scheme/external/supervisory-body")
                         .build())
-                    .build());
-
-            // Set reporting role using ReportingRoleEnum directly
-            cftcRegimeInfoBuilder.setReportingRole(ReportingRoleEnum.REPORTING_PARTY);
-            
-            // Set mandatorily clearable using MandatorilyClearableEnum directly
-            cftcRegimeInfoBuilder.setMandatorilyClearable(MandatorilyClearableEnum.PRODUCT_MANDATORY_BUT_NOT_CPTY);
+                    .build())
+                .setReportingRole(ReportingRoleEnum.REPORTING_PARTY)
+                .setMandatorilyClearable(MandatorilyClearableEnum.PRODUCT_MANDATORY_BUT_NOT_CPTY);
 
             // Add regime information to party information
-            PartyInformation.PartyInformationBuilder partyInfoBuilder = PartyInformation.builder()
-                .addRegimeInformation(cftcRegimeInfoBuilder);
+            partyInfoBuilder.addRegimeInformation(cftcRegimeBuilder.build());
 
             // Add party information to reportable information
-            reportableInfoBuilder.addPartyInformation(partyInfoBuilder);
+            reportableInfoBuilder.addPartyInformation(partyInfoBuilder.build());
 
             // Update the event with the new reportable information
             event = event.toBuilder()
