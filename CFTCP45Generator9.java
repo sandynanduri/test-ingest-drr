@@ -35,6 +35,7 @@ import drr.regulation.common.PartyInformation;
 import cdm.base.staticdata.party.Party;
 import cdm.base.staticdata.party.PartyIdentifier;
 import cdm.base.staticdata.party.PartyIdentifierTypeEnum;
+import cdm.base.staticdata.party.Counterparty;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -79,68 +80,34 @@ public class CFTCP45Generator {
             System.out.println("\nReportableEvent " + (i + 1) + ":");
             System.out.println("- Originating WorkflowStep: " + (event.getOriginatingWorkflowStep() != null ? "Present" : "Missing"));
             System.out.println("- Reportable Information: " + (event.getReportableInformation() != null ? "Present" : "Missing"));
-            if (event.getOriginatingWorkflowStep() != null) {
-                System.out.println("- Business Event: " + (event.getOriginatingWorkflowStep().getBusinessEvent() != null ? "Present" : "Missing"));
-                System.out.println("- Proposed Event: " + (event.getOriginatingWorkflowStep().getProposedEvent() != null ? "Present" : "Missing"));
-            }
-
-            // Create party information with dummy values
-            Party party1 = Party.builder()
-                .addPartyId(PartyIdentifier.builder()
-                    .setIdentifier(FieldWithMetaString.builder()
-                        .setValue("DUMMY0000000000LEI01")
-                        .setMeta(MetaFields.builder()
-                            .setScheme("http://www.fpml.org/coding-scheme/external/iso17442")
-                            .build())
-                        .build())
-                    .setIdentifierType(PartyIdentifierTypeEnum.LEI)
-                    .build())
-                .build();
-
+            
             // Create ReportableInformation with party details
             ReportableInformation.ReportableInformationBuilder reportableInfoBuilder = ReportableInformation.builder()
                 .setExecutionVenueType(ExecutionVenueTypeEnum.OFF_FACILITY)
                 .setConfirmationMethod(ConfirmationMethodEnum.NOT_CONFIRMED)
                 .setIntragroup(false);
 
-            // Create PartyInformation
-            PartyInformation.PartyInformationBuilder partyInfoBuilder = PartyInformation.builder()
-                .setPartyReference(ReferenceWithMetaParty.builder()
-                    .setValue(party1)
-                    .build());
+            // Create PartyInformation for both parties
+            PartyInformation.PartyInformationBuilder party1InfoBuilder = createPartyInformation(
+                CounterpartyRoleEnum.PARTY_1, 
+                "DUMMY0000000000LEI01", 
+                ReportingRoleEnum.REPORTING_PARTY
+            );
 
-            // Create CFTC regime information
-            ReportingRegime.ReportingRegimeBuilder cftcRegimeBuilder = ReportingRegime.builder()
-                .setSupervisoryBody(FieldWithMetaSupervisoryBodyEnum.builder()
-                    .setValue(SupervisoryBodyEnum.CFTC)
-                    .setMeta(MetaFields.builder()
-                        .setScheme("http://www.fpml.org/coding-scheme/external/supervisory-body")
-                        .build())
-                    .build())
-                .setReportingRole(ReportingRoleEnum.REPORTING_PARTY)
-                .setMandatorilyClearable(MandatorilyClearableEnum.PRODUCT_MANDATORY_BUT_NOT_CPTY);
-
-            // Add regime information to party information
-            partyInfoBuilder.addRegimeInformation(cftcRegimeBuilder.build());
+            PartyInformation.PartyInformationBuilder party2InfoBuilder = createPartyInformation(
+                CounterpartyRoleEnum.PARTY_2,
+                "DUMMY0000000000LEI02",
+                ReportingRoleEnum.VOLUNTARY_PARTY
+            );
 
             // Add party information to reportable information
-            reportableInfoBuilder.addPartyInformation(partyInfoBuilder.build());
+            reportableInfoBuilder.addPartyInformation(party1InfoBuilder.build());
+            reportableInfoBuilder.addPartyInformation(party2InfoBuilder.build());
 
             // Update the event with the new reportable information
             event = event.toBuilder()
                 .setReportableInformation(reportableInfoBuilder.build())
                 .build();
-
-            // Print complete ReportableEvent structure
-            System.out.println("\nComplete ReportableEvent Structure:");
-            try {
-                String jsonOutput = RosettaObjectMapper.getNewRosettaObjectMapper()
-                    .writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(event);
-                System.out.println(jsonOutput);
-            } catch (Exception e) {
-                System.out.println("Error printing ReportableEvent: " + e.getMessage());
-            }
 
             try {
                 runReport(event);
@@ -148,6 +115,44 @@ public class CFTCP45Generator {
                 System.out.println("Error running report: " + e.getMessage());
             }
         }
+    }
+
+    private PartyInformation.PartyInformationBuilder createPartyInformation(
+            CounterpartyRoleEnum role,
+            String lei,
+            ReportingRoleEnum reportingRole) {
+        
+        Party party = Party.builder()
+            .addPartyId(PartyIdentifier.builder()
+                .setIdentifier(FieldWithMetaString.builder()
+                    .setValue(lei)
+                    .setMeta(MetaFields.builder()
+                        .setScheme("http://www.fpml.org/coding-scheme/external/iso17442")
+                        .build())
+                    .build())
+                .setIdentifierType(PartyIdentifierTypeEnum.LEI)
+                .build())
+            .build();
+
+        ReportingRegime.ReportingRegimeBuilder regimeBuilder = ReportingRegime.builder()
+            .setRegimeName(FieldWithMetaRegimeNameEnum.builder()
+                .setValue(RegimeNameEnum.DODD_FRANK_ACT)
+                .setMeta(MetaFields.builder()
+                    .setScheme("http://www.fpml.org/coding-scheme/external/regime-name")
+                    .build())
+                .build())
+            .setSupervisoryBody(FieldWithMetaSupervisoryBodyEnum.builder()
+                .setValue(SupervisoryBodyEnum.CFTC)
+                .setMeta(MetaFields.builder()
+                    .setScheme("http://www.fpml.org/coding-scheme/external/supervisory-body")
+                    .build())
+                .build())
+            .setReportingRole(reportingRole)
+            .setMandatorilyClearable(MandatorilyClearableEnum.PRODUCT_MANDATORY_BUT_NOT_CPTY);
+
+        return PartyInformation.builder()
+            .setPartyReference(ReferenceWithMetaParty.builder().setValue(party).build())
+            .addRegimeInformation(regimeBuilder.build());
     }
 
     private void validateDRRFields(WorkflowStep workflowStep) {
@@ -347,6 +352,22 @@ public class CFTCP45Generator {
 
     private ReferenceWithMetaParty getCounterparty(ReportableEvent reportableEvent, CounterpartyRoleEnum party) {
         ExtractTradeCounterparty func = injector.getInstance(ExtractTradeCounterparty.class);
-        return func.evaluate(reportableEvent, party).getPartyReference();
+        Counterparty counterparty = func.evaluate(reportableEvent, party);
+        if (counterparty == null) {
+            // If no counterparty found, create a default one based on the role
+            Party defaultParty = Party.builder()
+                .addPartyId(PartyIdentifier.builder()
+                    .setIdentifier(FieldWithMetaString.builder()
+                        .setValue(party == CounterpartyRoleEnum.PARTY_1 ? "DUMMY0000000000LEI01" : "DUMMY0000000000LEI02")
+                        .setMeta(MetaFields.builder()
+                            .setScheme("http://www.fpml.org/coding-scheme/external/iso17442")
+                            .build())
+                        .build())
+                    .setIdentifierType(PartyIdentifierTypeEnum.LEI)
+                    .build())
+                .build();
+            return ReferenceWithMetaParty.builder().setValue(defaultParty).build();
+        }
+        return counterparty.getPartyReference();
     }
 } 
