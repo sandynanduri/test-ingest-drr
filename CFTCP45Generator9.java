@@ -81,6 +81,16 @@ public class CFTCP45Generator {
             System.out.println("- Originating WorkflowStep: " + (event.getOriginatingWorkflowStep() != null ? "Present" : "Missing"));
             System.out.println("- Reportable Information: " + (event.getReportableInformation() != null ? "Present" : "Missing"));
             
+            // Print the created reportable event
+            try {
+                System.out.println("\nCreated Reportable Event:");
+                System.out.println(RosettaObjectMapper.getNewRosettaObjectMapper()
+                    .writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(event));
+            } catch (IOException e) {
+                System.out.println("Error printing reportable event: " + e.getMessage());
+            }
+            
             // Create ReportableInformation with party details
             ReportableInformation.ReportableInformationBuilder reportableInfoBuilder = ReportableInformation.builder()
                 .setExecutionVenueType(ExecutionVenueTypeEnum.OFF_FACILITY)
@@ -108,6 +118,32 @@ public class CFTCP45Generator {
             event = event.toBuilder()
                 .setReportableInformation(reportableInfoBuilder.build())
                 .build();
+
+            // Print the populated reportable information
+            System.out.println("\nPopulated Reportable Information:");
+            System.out.println("- Execution Venue Type: " + event.getReportableInformation().getExecutionVenueType());
+            System.out.println("- Confirmation Method: " + event.getReportableInformation().getConfirmationMethod());
+            System.out.println("- Intragroup: " + event.getReportableInformation().getIntragroup());
+            System.out.println("\nParty Information:");
+            event.getReportableInformation().getPartyInformation().forEach(partyInfo -> {
+                System.out.println("  Party:");
+                if (partyInfo.getPartyReference() != null && partyInfo.getPartyReference().getValue() != null) {
+                    System.out.println("  - LEI: " + partyInfo.getPartyReference().getValue().getPartyId().get(0).getIdentifier().getValue());
+                    partyInfo.getRegimeInformation().forEach(regime -> {
+                        System.out.println("    - Reporting Role: " + regime.getReportingRole());
+                    });
+                }
+            });
+
+            // Print the final reportable event after updates
+            try {
+                System.out.println("\nFinal Reportable Event After Updates:");
+                System.out.println(RosettaObjectMapper.getNewRosettaObjectMapper()
+                    .writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(event));
+            } catch (IOException e) {
+                System.out.println("Error printing final reportable event: " + e.getMessage());
+            }
 
             try {
                 runReport(event);
