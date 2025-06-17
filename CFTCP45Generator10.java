@@ -36,7 +36,6 @@ import cdm.base.staticdata.party.Party;
 import cdm.base.staticdata.party.PartyIdentifier;
 import cdm.base.staticdata.party.PartyIdentifierTypeEnum;
 import cdm.base.staticdata.party.Counterparty;
-import drr.standards.iso.EventTypeEnum;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -54,7 +53,7 @@ public class CFTCP45Generator {
 
     public static void main(String[] args) throws IOException {
         // 1. Load and validate the CDM object
-        WorkflowStep workflowStep = ResourcesUtils.getObjectAndResolveReferences(WorkflowStep.class, "regulatory-reporting/input/events/InterestRateSwap-Termination-01.json");
+        WorkflowStep workflowStep = ResourcesUtils.getObjectAndResolveReferences(WorkflowStep.class, "regulatory-reporting/input/events/New-Trade-01.json");
         
         // 2. Analyze the CDM object structure
         CFTCP45Generator generator = new CFTCP45Generator();
