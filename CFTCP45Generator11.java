@@ -82,30 +82,46 @@ public class CFTCP45Generator {
             
             // DEBUG: Inspect ReportableEvent structure
             System.out.println("\n=== DEBUGGING ReportableEvent Structure ===");
-            if (event.getReportableInformation() != null) {
-                System.out.println("✅ ReportableInformation exists");
-                if (event.getReportableInformation().getPartyInformation() != null) {
-                    System.out.println("✅ PartyInformation list exists, size: " + event.getReportableInformation().getPartyInformation().size());
-                    if (!event.getReportableInformation().getPartyInformation().isEmpty()) {
-                        System.out.println("✅ PartyInformation has entries - should extract from here!");
+            if (event.getReportableTrade() != null) {
+                System.out.println("[OK] ReportableTrade exists");
+                if (event.getReportableTrade().getTrade() != null && event.getReportableTrade().getTrade().getParty() != null) {
+                    System.out.println("[OK] Party list exists, size: " + event.getReportableTrade().getTrade().getParty().size());
+                    if (!event.getReportableTrade().getTrade().getParty().isEmpty()) {
+                        System.out.println("[OK] Party list has entries - should extract from here!");
                     } else {
-                        System.out.println("❌ PartyInformation list is EMPTY");
+                        System.out.println("[ERROR] Party list is EMPTY");
                     }
                 } else {
-                    System.out.println("❌ PartyInformation list is NULL");
+                    System.out.println("[ERROR] Party list is NULL");
                 }
             } else {
-                System.out.println("❌ ReportableInformation is NULL");
+                System.out.println("[ERROR] ReportableTrade is NULL");
+            }
+            
+            if (event.getReportableInformation() != null) {
+                System.out.println("[OK] ReportableInformation exists (for regulatory metadata)");
+                if (event.getReportableInformation().getPartyInformation() != null) {
+                    System.out.println("[OK] PartyInformation list exists, size: " + event.getReportableInformation().getPartyInformation().size());
+                    if (!event.getReportableInformation().getPartyInformation().isEmpty()) {
+                        System.out.println("[OK] PartyInformation has entries");
+                    } else {
+                        System.out.println("[ERROR] PartyInformation list is EMPTY");
+                    }
+                } else {
+                    System.out.println("[ERROR] PartyInformation list is NULL");
+                }
+            } else {
+                System.out.println("[ERROR] ReportableInformation is NULL");
             }
             
             // DEBUG: Check if we need to go back to original trade instead
             if (event.getOriginatingWorkflowStep() != null) {
-                System.out.println("✅ OriginatingWorkflowStep exists - can fallback to original trade data");
+                System.out.println("[OK] OriginatingWorkflowStep exists - can fallback to original trade data");
                 if (event.getOriginatingWorkflowStep().getBusinessEvent() != null &&
                     !event.getOriginatingWorkflowStep().getBusinessEvent().getAfter().isEmpty()) {
                     TradeState tradeState = event.getOriginatingWorkflowStep().getBusinessEvent().getAfter().get(0);
                     if (tradeState.getTrade() != null && tradeState.getTrade().getParty() != null) {
-                        System.out.println("✅ Original trade has " + tradeState.getTrade().getParty().size() + " parties");
+                        System.out.println("[OK] Original trade has " + tradeState.getTrade().getParty().size() + " parties");
                     }
                 }
             }
@@ -210,68 +226,59 @@ public class CFTCP45Generator {
         
         try {
             // Extract directly from ReportableEvent's already-processed party information
-            if (reportableEvent.getReportableInformation() != null && 
-                reportableEvent.getReportableInformation().getPartyInformation() != null &&
-                !reportableEvent.getReportableInformation().getPartyInformation().isEmpty()) {
+            if (reportableEvent.getReportableTrade() != null && 
+                reportableEvent.getReportableTrade().getTrade() != null &&
+                reportableEvent.getReportableTrade().getTrade().getParty() != null &&
+                !reportableEvent.getReportableTrade().getTrade().getParty().isEmpty()) {
                 
-                System.out.println("Extracting party data from ReportableEvent.getReportableInformation()...");
+                System.out.println("Extracting party data from ReportableEvent.getReportableTrade()...");
                 
-                List<? extends PartyInformation> partyInfoList = reportableEvent.getReportableInformation().getPartyInformation();
+                List<? extends Party> partyList = reportableEvent.getReportableTrade().getTrade().getParty();
                 
                 // Extract Party 1 from ReportableEvent
-                if (!partyInfoList.isEmpty()) {
-                    PartyInformation partyInfo1 = partyInfoList.get(0);
-                    if (partyInfo1.getPartyReference() != null && 
-                        partyInfo1.getPartyReference().getValue() != null) {
-                        
-                        Party party1 = partyInfo1.getPartyReference().getValue();
-                        
-                        // Extract LEI
-                        if (party1.getPartyId() != null && !party1.getPartyId().isEmpty()) {
-                            PartyIdentifier partyId1 = party1.getPartyId().get(0);
-                            if (partyId1.getIdentifier() != null && partyId1.getIdentifier().getValue() != null) {
-                                party1Lei = partyId1.getIdentifier().getValue();
-                                System.out.println("Extracted Party 1 LEI from ReportableEvent: " + party1Lei);
-                            }
+                if (!partyList.isEmpty()) {
+                    Party party1 = partyList.get(0);
+                    
+                    // Extract LEI
+                    if (party1.getPartyId() != null && !party1.getPartyId().isEmpty()) {
+                        PartyIdentifier partyId1 = party1.getPartyId().get(0);
+                        if (partyId1.getIdentifier() != null && partyId1.getIdentifier().getValue() != null) {
+                            party1Lei = partyId1.getIdentifier().getValue();
+                            System.out.println("Extracted Party 1 LEI from ReportableEvent: " + party1Lei);
                         }
-                        
-                        // Extract Name
-                        if (party1.getName() != null && party1.getName().getValue() != null) {
-                            party1Name = party1.getName().getValue();
-                            System.out.println("Extracted Party 1 Name from ReportableEvent: " + party1Name);
-                        }
+                    }
+                    
+                    // Extract Name
+                    if (party1.getName() != null && party1.getName().getValue() != null) {
+                        party1Name = party1.getName().getValue();
+                        System.out.println("Extracted Party 1 Name from ReportableEvent: " + party1Name);
                     }
                 }
                 
                 // Extract Party 2 from ReportableEvent
-                if (partyInfoList.size() >= 2) {
-                    PartyInformation partyInfo2 = partyInfoList.get(1);
-                    if (partyInfo2.getPartyReference() != null && 
-                        partyInfo2.getPartyReference().getValue() != null) {
-                        
-                        Party party2 = partyInfo2.getPartyReference().getValue();
-                        
-                        // Extract LEI
-                        if (party2.getPartyId() != null && !party2.getPartyId().isEmpty()) {
-                            PartyIdentifier partyId2 = party2.getPartyId().get(0);
-                            if (partyId2.getIdentifier() != null && partyId2.getIdentifier().getValue() != null) {
-                                party2Lei = partyId2.getIdentifier().getValue();
-                                System.out.println("Extracted Party 2 LEI from ReportableEvent: " + party2Lei);
-                            }
+                if (partyList.size() >= 2) {
+                    Party party2 = partyList.get(1);
+                    
+                    // Extract LEI
+                    if (party2.getPartyId() != null && !party2.getPartyId().isEmpty()) {
+                        PartyIdentifier partyId2 = party2.getPartyId().get(0);
+                        if (partyId2.getIdentifier() != null && partyId2.getIdentifier().getValue() != null) {
+                            party2Lei = partyId2.getIdentifier().getValue();
+                            System.out.println("Extracted Party 2 LEI from ReportableEvent: " + party2Lei);
                         }
-                        
-                        // Extract Name
-                        if (party2.getName() != null && party2.getName().getValue() != null) {
-                            party2Name = party2.getName().getValue();
-                            System.out.println("Extracted Party 2 Name from ReportableEvent: " + party2Name);
-                        }
+                    }
+                    
+                    // Extract Name
+                    if (party2.getName() != null && party2.getName().getValue() != null) {
+                        party2Name = party2.getName().getValue();
+                        System.out.println("Extracted Party 2 Name from ReportableEvent: " + party2Name);
                     }
                 }
                 
                 System.out.println("Successfully extracted party data from ReportableEvent!");
                 
             } else {
-                System.out.println("No party information found in ReportableEvent.getReportableInformation(), using fallback values");
+                System.out.println("No party information found in ReportableEvent.getReportableTrade(), using fallback values");
             }
             
         } catch (Exception e) {
@@ -559,23 +566,44 @@ public class CFTCP45Generator {
     }
 
     private ReferenceWithMetaParty getCounterparty(ReportableEvent reportableEvent, CounterpartyRoleEnum party) {
-        ExtractTradeCounterparty func = injector.getInstance(ExtractTradeCounterparty.class);
-        Counterparty counterparty = func.evaluate(reportableEvent, party);
-        if (counterparty == null) {
-            // If no counterparty found, create a default one based on the role
-            Party defaultParty = Party.builder()
-                .addPartyId(PartyIdentifier.builder()
-                    .setIdentifier(FieldWithMetaString.builder()
-                        .setValue(party == CounterpartyRoleEnum.PARTY_1 ? "DUMMY0000000000LEI01" : "DUMMY0000000000LEI02")
-                        .setMeta(MetaFields.builder()
-                            .setScheme("http://www.fpml.org/coding-scheme/external/iso17442")
-                            .build())
-                        .build())
-                    .setIdentifierType(PartyIdentifierTypeEnum.LEI)
-                    .build())
-                .build();
-            return ReferenceWithMetaParty.builder().setValue(defaultParty).build();
+        try {
+            // Extract directly from ReportableTrade
+            if (reportableEvent.getReportableTrade() != null && 
+                reportableEvent.getReportableTrade().getTrade() != null &&
+                reportableEvent.getReportableTrade().getTrade().getParty() != null &&
+                !reportableEvent.getReportableTrade().getTrade().getParty().isEmpty()) {
+                
+                List<? extends Party> parties = reportableEvent.getReportableTrade().getTrade().getParty();
+                
+                // Get the right party based on role
+                Party targetParty = null;
+                if (party == CounterpartyRoleEnum.PARTY_1 && parties.size() >= 1) {
+                    targetParty = parties.get(0);
+                } else if (party == CounterpartyRoleEnum.PARTY_2 && parties.size() >= 2) {
+                    targetParty = parties.get(1);
+                }
+                
+                if (targetParty != null) {
+                    return ReferenceWithMetaParty.builder().setValue(targetParty).build();
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Warning: Could not extract party from ReportableTrade: " + e.getMessage());
         }
-        return counterparty.getPartyReference();
+        
+        // Fallback with dummy data if extraction fails
+        String lei = party == CounterpartyRoleEnum.PARTY_1 ? "DUMMY0000000000LEI01" : "DUMMY0000000000LEI02";
+        Party defaultParty = Party.builder()
+            .addPartyId(PartyIdentifier.builder()
+                .setIdentifier(FieldWithMetaString.builder()
+                    .setValue(lei)
+                    .setMeta(MetaFields.builder()
+                        .setScheme("http://www.fpml.org/coding-scheme/external/iso17442")
+                        .build())
+                    .build())
+                .setIdentifierType(PartyIdentifierTypeEnum.LEI)
+                .build())
+            .build();
+        return ReferenceWithMetaParty.builder().setValue(defaultParty).build();
     }
 } 
