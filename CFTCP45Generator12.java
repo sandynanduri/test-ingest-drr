@@ -127,22 +127,31 @@ public class CFTCP45Generator {
             }
             System.out.println("===============================================");
             
-            // DEBUG: Inspect Product Information
-            System.out.println("\n=== DEBUGGING Product Information ===");
+            // DEBUG: Inspect Product Information from Multiple Sources
+            System.out.println("\n=== DEBUGGING Product Information (All Extraction Paths) ===");
             if (event.getReportableTrade() != null && event.getReportableTrade().getTrade() != null) {
                 Trade trade = event.getReportableTrade().getTrade();
                 
+                // Path 1: Traditional tradableProduct approach
+                System.out.println("\n[PATH 1] Checking tradableProduct path:");
                 if (trade.getTradableProduct() != null) {
                     System.out.println("[OK] TradableProduct exists");
                     
-                    // Check product details
                     if (trade.getTradableProduct().getProduct() != null) {
-                        System.out.println("[OK] Product exists");
+                        System.out.println("[OK] Product exists via tradableProduct");
                         System.out.println("- Product type: " + trade.getTradableProduct().getProduct().getClass().getSimpleName());
+                        
+                        // Check for contractual product
+                        if (trade.getTradableProduct().getProduct().getContractualProduct() != null) {
+                            System.out.println("[OK] ContractualProduct exists via tradableProduct");
+                            if (trade.getTradableProduct().getProduct().getContractualProduct().getEconomicTerms() != null) {
+                                System.out.println("[OK] EconomicTerms exist via tradableProduct");
+                            }
+                        }
                         
                         // Try to print product structure
                         try {
-                            System.out.println("\nProduct JSON Structure:");
+                            System.out.println("\nProduct JSON Structure (tradableProduct path):");
                             System.out.println(RosettaObjectMapper.getNewRosettaObjectMapper()
                                 .writerWithDefaultPrettyPrinter()
                                 .writeValueAsString(trade.getTradableProduct().getProduct()));
@@ -150,7 +159,7 @@ public class CFTCP45Generator {
                             System.out.println("Could not serialize product: " + e.getMessage());
                         }
                     } else {
-                        System.out.println("[ERROR] Product is NULL");
+                        System.out.println("[ERROR] Product is NULL via tradableProduct");
                     }
                     
                     // Check trade lots
@@ -166,15 +175,110 @@ public class CFTCP45Generator {
                             System.out.println("Could not serialize tradeLot: " + e.getMessage());
                         }
                     } else {
-                        System.out.println("[ERROR] TradeLot is NULL or EMPTY");
+                        System.out.println("[WARN] TradeLot is NULL or EMPTY");
                     }
                 } else {
-                    System.out.println("[ERROR] TradableProduct is NULL");
+                    System.out.println("[ERROR] TradableProduct is NULL - trying alternative paths...");
+                }
+                
+                // Path 2: Check if there's a Product elsewhere in the structure
+                System.out.println("\n[PATH 2] Checking alternative product locations:");
+                
+                // Check if there's any product information in the trade JSON structure
+                try {
+                    String tradeJson = RosettaObjectMapper.getNewRosettaObjectMapper()
+                        .writerWithDefaultPrettyPrinter()
+                        .writeValueAsString(trade);
+                    
+                    // Look for product-related keywords in the JSON
+                    if (tradeJson.contains("contractualProduct")) {
+                        System.out.println("[OK] Found 'contractualProduct' in trade structure");
+                    }
+                    if (tradeJson.contains("economicTerms")) {
+                        System.out.println("[OK] Found 'economicTerms' in trade structure");
+                    }
+                    if (tradeJson.contains("productTaxonomy")) {
+                        System.out.println("[OK] Found 'productTaxonomy' in trade structure");
+                    }
+                    if (tradeJson.contains("assetClass")) {
+                        System.out.println("[OK] Found 'assetClass' in trade structure");
+                    }
+                    if (tradeJson.contains("payout")) {
+                        System.out.println("[OK] Found 'payout' in trade structure");
+                    }
+                    
+                    // Print sections of JSON that might contain product info
+                    if (tradeJson.contains("product") && !tradeJson.contains("tradableProduct")) {
+                        System.out.println("[INFO] Product information exists but not under tradableProduct");
+                        // Find and extract the product section
+                        String[] lines = tradeJson.split("\n");
+                        boolean inProductSection = false;
+                        int braceCount = 0;
+                        System.out.println("\n[EXTRACTED] Product-related content found:");
+                        for (String line : lines) {
+                            if (line.contains("\"product\"") && line.contains(":")) {
+                                inProductSection = true;
+                                braceCount = 0;
+                            }
+                            if (inProductSection) {
+                                System.out.println(line);
+                                braceCount += line.chars().mapToObj(c -> (char) c).mapToInt(c -> c == '{' ? 1 : c == '}' ? -1 : 0).sum();
+                                if (braceCount <= 0 && line.contains("}")) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                } catch (Exception e) {
+                    System.out.println("Could not analyze trade JSON: " + e.getMessage());
+                }
+                
+                // Path 3: Check workflow step for product information
+                System.out.println("\n[PATH 3] Checking WorkflowStep for product information:");
+                if (event.getOriginatingWorkflowStep() != null && 
+                    event.getOriginatingWorkflowStep().getBusinessEvent() != null &&
+                    !event.getOriginatingWorkflowStep().getBusinessEvent().getAfter().isEmpty()) {
+                    
+                    TradeState originalTradeState = event.getOriginatingWorkflowStep().getBusinessEvent().getAfter().get(0);
+                    if (originalTradeState.getTrade() != null && 
+                        originalTradeState.getTrade().getTradableProduct() != null &&
+                        originalTradeState.getTrade().getTradableProduct().getProduct() != null) {
+                        System.out.println("[OK] Product found in original WorkflowStep");
+                        System.out.println("- Product type: " + originalTradeState.getTrade().getTradableProduct().getProduct().getClass().getSimpleName());
+                    } else {
+                        System.out.println("[WARN] No product in original WorkflowStep either");
+                    }
+                }
+                
+                // Path 4: Raw inspection of the entire event structure for any product data
+                System.out.println("\n[PATH 4] Raw search for any product-related data:");
+                try {
+                    String eventJson = RosettaObjectMapper.getNewRosettaObjectMapper()
+                        .writerWithDefaultPrettyPrinter()
+                        .writeValueAsString(event);
+                    
+                    String[] productKeywords = {
+                        "contractualProduct", "economicTerms", "productTaxonomy", 
+                        "primaryAssetClass", "secondaryAssetClass", "productType",
+                        "interestRatePayout", "commodityPayout", "optionPayout",
+                        "forwardPayout", "performancePayout", "creditDefaultPayout"
+                    };
+                    
+                    System.out.println("Product-related keywords found in event:");
+                    for (String keyword : productKeywords) {
+                        if (eventJson.contains(keyword)) {
+                            System.out.println("  [FOUND] " + keyword);
+                        }
+                    }
+                    
+                } catch (Exception e) {
+                    System.out.println("Could not analyze event JSON: " + e.getMessage());
                 }
                 
                 // Check trade identifiers for additional info
                 if (trade.getTradeIdentifier() != null && !trade.getTradeIdentifier().isEmpty()) {
-                    System.out.println("[OK] TradeIdentifier exists, size: " + trade.getTradeIdentifier().size());
+                    System.out.println("\n[OK] TradeIdentifier exists, size: " + trade.getTradeIdentifier().size());
                     trade.getTradeIdentifier().forEach(identifier -> {
                         System.out.println("- Identifier Type: " + identifier.getIdentifierType());
                         if (identifier.getAssignedIdentifier() != null && !identifier.getAssignedIdentifier().isEmpty()) {
@@ -198,7 +302,7 @@ public class CFTCP45Generator {
             } else {
                 System.out.println("[ERROR] Cannot access Trade for product information");
             }
-            System.out.println("==========================================");
+            System.out.println("========================================");
             
             // Print the created reportable event
             try {
