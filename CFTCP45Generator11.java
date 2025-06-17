@@ -80,6 +80,37 @@ public class CFTCP45Generator {
             System.out.println("- Originating WorkflowStep: " + (event.getOriginatingWorkflowStep() != null ? "Present" : "Missing"));
             System.out.println("- Reportable Information: " + (event.getReportableInformation() != null ? "Present" : "Missing"));
             
+            // DEBUG: Inspect ReportableEvent structure
+            System.out.println("\n=== DEBUGGING ReportableEvent Structure ===");
+            if (event.getReportableInformation() != null) {
+                System.out.println("✅ ReportableInformation exists");
+                if (event.getReportableInformation().getPartyInformation() != null) {
+                    System.out.println("✅ PartyInformation list exists, size: " + event.getReportableInformation().getPartyInformation().size());
+                    if (!event.getReportableInformation().getPartyInformation().isEmpty()) {
+                        System.out.println("✅ PartyInformation has entries - should extract from here!");
+                    } else {
+                        System.out.println("❌ PartyInformation list is EMPTY");
+                    }
+                } else {
+                    System.out.println("❌ PartyInformation list is NULL");
+                }
+            } else {
+                System.out.println("❌ ReportableInformation is NULL");
+            }
+            
+            // DEBUG: Check if we need to go back to original trade instead
+            if (event.getOriginatingWorkflowStep() != null) {
+                System.out.println("✅ OriginatingWorkflowStep exists - can fallback to original trade data");
+                if (event.getOriginatingWorkflowStep().getBusinessEvent() != null &&
+                    !event.getOriginatingWorkflowStep().getBusinessEvent().getAfter().isEmpty()) {
+                    TradeState tradeState = event.getOriginatingWorkflowStep().getBusinessEvent().getAfter().get(0);
+                    if (tradeState.getTrade() != null && tradeState.getTrade().getParty() != null) {
+                        System.out.println("✅ Original trade has " + tradeState.getTrade().getParty().size() + " parties");
+                    }
+                }
+            }
+            System.out.println("===============================================");
+            
             // Print the created reportable event
             try {
                 System.out.println("\nCreated Reportable Event:");
