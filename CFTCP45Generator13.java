@@ -51,20 +51,67 @@ public class CFTCP45Generator {
     }
 
     public static void main(String[] args) throws IOException {
-        // 1. Load and validate the CDM object
-        WorkflowStep workflowStep = ResourcesUtils.getObjectAndResolveReferences(WorkflowStep.class, "regulatory-reporting/input/events/New-Trade-01.json");
+        // 1. Load and validate the CDM object - CORRECTED to load as ReportableEvent
+        // The JSON has "originatingWorkflowStep" as top-level, so it's a ReportableEvent structure
+        System.out.println("=== Loading CDM Object ===");
         
-        // 2. Analyze the CDM object structure
-        CFTCP45Generator generator = new CFTCP45Generator();
-        generator.analyzeCDMObject(workflowStep);
-        
-        // 3. Validate fields for DRR
-        System.out.println("\n=== DRR Field Validation ===");
-        generator.validateDRRFields(workflowStep);
-
-        // 4. Create ReportableEvent
-        System.out.println("\n=== Creating ReportableEvent ===");
-        generator.createReportableEvent(workflowStep);
+        try {
+            // First try loading as ReportableEvent (likely correct)
+            ReportableEvent reportableEvent = ResourcesUtils.getObjectAndResolveReferences(ReportableEvent.class, "regulatory-reporting/input/events/New-Trade-01.json");
+            System.out.println("[SUCCESS] Loaded as ReportableEvent");
+            
+            // 2. Analyze the CDM object structure
+            CFTCP45Generator generator = new CFTCP45Generator();
+            generator.analyzeCDMObject(reportableEvent);
+            
+            // 3. Run comprehensive product validation
+            System.out.println("\n=== COMPREHENSIVE PRODUCT VALIDATION ===");
+            generator.validateAllProductPaths(reportableEvent);
+            System.out.println("==========================================");
+            
+            // 4. Try to generate the DRR report
+            System.out.println("\n=== Generating DRR Report ===");
+            try {
+                generator.runReport(reportableEvent);
+            } catch (IOException e) {
+                System.out.println("Error running report: " + e.getMessage());
+            }
+            
+        } catch (Exception e) {
+            System.out.println("[ERROR] Could not load as ReportableEvent: " + e.getMessage());
+            
+            // Fallback: try loading as WorkflowStep
+            try {
+                WorkflowStep workflowStep = ResourcesUtils.getObjectAndResolveReferences(WorkflowStep.class, "regulatory-reporting/input/events/New-Trade-01.json");
+                System.out.println("[SUCCESS] Loaded as WorkflowStep");
+                
+                // 2. Analyze the CDM object structure
+                CFTCP45Generator generator = new CFTCP45Generator();
+                generator.analyzeCDMObject(workflowStep);
+                
+                // 3. Validate fields for DRR
+                System.out.println("\n=== DRR Field Validation ===");
+                generator.validateDRRFields(workflowStep);
+                
+                // 4. Create ReportableEvent
+                System.out.println("\n=== Creating ReportableEvent ===");
+                generator.createReportableEvent(workflowStep);
+                
+            } catch (Exception e2) {
+                System.out.println("[ERROR] Could not load as WorkflowStep either: " + e2.getMessage());
+                
+                // Last resort: try to understand the JSON structure
+                try {
+                    String json = com.google.common.io.Resources.toString(
+                        com.google.common.io.Resources.getResource("regulatory-reporting/input/events/New-Trade-01.json"), 
+                        java.nio.charset.StandardCharsets.UTF_8);
+                    System.out.println("\nJSON structure (first 1000 chars):");
+                    System.out.println(json.substring(0, Math.min(1000, json.length())));
+                } catch (Exception e3) {
+                    System.out.println("[ERROR] Could not even read the JSON file: " + e3.getMessage());
+                }
+            }
+        }
     }
 
     private void createReportableEvent(WorkflowStep workflowStep) {
@@ -384,54 +431,45 @@ public class CFTCP45Generator {
         }
     }
 
-    // Comprehensive Product Validation Method
+    // Comprehensive Product Validation Method - CORRECT CDM APPROACH
     private void validateAllProductPaths(ReportableEvent reportableEvent) {
-        System.out.println("Starting comprehensive product validation...");
+        System.out.println("Starting comprehensive product validation using CORRECT CDM methods...");
         
-        // Path 1: Check ReportableEvent.getReportableTrade().getTrade().getProduct() DIRECTLY
-        System.out.println("\n[VALIDATION PATH 1] ReportableEvent → ReportableTrade → Trade → Product (DIRECT)");
+        // Path 1: Use CDM ProductForEvent Function Pattern  
+        System.out.println("\n[VALIDATION PATH 1] CDM ProductForEvent Pattern (Recommended)");
         try {
-            if (reportableEvent.getReportableTrade() != null) {
-                System.out.println("  ✓ ReportableTrade exists");
+            if (reportableEvent.getReportableTrade() != null && 
+                reportableEvent.getReportableTrade().getTrade() != null) {
                 
-                if (reportableEvent.getReportableTrade().getTrade() != null) {
-                    System.out.println("  ✓ Trade exists");
-                    Trade trade = reportableEvent.getReportableTrade().getTrade();
+                Trade trade = reportableEvent.getReportableTrade().getTrade();
+                System.out.println("  ✓ Trade extracted from ReportableEvent");
+                
+                // Test the standard CDM path: trade -> tradableProduct -> product
+                if (trade.getTradableProduct() != null) {
+                    System.out.println("  ✓ TradableProduct exists");
                     
-                    // Try to access Product directly (this is what you mentioned!)
-                    try {
-                        // Use reflection to check if Trade has a getProduct() method
-                        java.lang.reflect.Method getProductMethod = trade.getClass().getMethod("getProduct");
-                        Object product = getProductMethod.invoke(trade);
+                    if (trade.getTradableProduct().getProduct() != null) {
+                        System.out.println("  🎉 FOUND PRODUCT via trade.getTradableProduct().getProduct()!");
+                        System.out.println("  - Product Class: " + trade.getTradableProduct().getProduct().getClass().getSimpleName());
                         
-                        if (product != null) {
-                            System.out.println("  🎉 FOUND PRODUCT via Trade.getProduct()!");
-                            System.out.println("  - Product Class: " + product.getClass().getSimpleName());
-                            System.out.println("  - Product Package: " + product.getClass().getPackage().getName());
-                            
-                            // Analyze this product in detail
-                            analyzeProductInDetail(product, "Trade.getProduct()");
-                            
-                        } else {
-                            System.out.println("  ❌ Trade.getProduct() returns NULL");
-                        }
-                    } catch (NoSuchMethodException e) {
-                        System.out.println("  ❌ Trade.getProduct() method does not exist");
-                    } catch (Exception e) {
-                        System.out.println("  ❌ Error calling Trade.getProduct(): " + e.getMessage());
+                        // Analyze this product in detail
+                        analyzeProductInDetail(trade.getTradableProduct().getProduct(), "trade.getTradableProduct().getProduct()");
+                        
+                    } else {
+                        System.out.println("  ❌ trade.getTradableProduct().getProduct() returns NULL");
                     }
                 } else {
-                    System.out.println("  ❌ Trade is NULL");
+                    System.out.println("  ❌ trade.getTradableProduct() returns NULL");
                 }
             } else {
-                System.out.println("  ❌ ReportableTrade is NULL");
+                System.out.println("  ❌ Cannot access Trade from ReportableEvent");
             }
         } catch (Exception e) {
-            System.out.println("  ❌ Error in validation path 1: " + e.getMessage());
+            System.out.println("  ❌ Error in CDM ProductForEvent pattern: " + e.getMessage());
         }
         
-        // Path 2: Check OriginatingWorkflowStep → BusinessEvent → After → TradeState → Trade → Product
-        System.out.println("\n[VALIDATION PATH 2] OriginatingWorkflowStep → BusinessEvent → TradeState → Trade → Product");
+        // Path 2: Check OriginatingWorkflowStep → BusinessEvent → TradeState → Trade → TradableProduct → Product
+        System.out.println("\n[VALIDATION PATH 2] OriginatingWorkflowStep → TradeState → Trade → Product");
         try {
             if (reportableEvent.getOriginatingWorkflowStep() != null) {
                 System.out.println("  ✓ OriginatingWorkflowStep exists");
@@ -449,25 +487,22 @@ public class CFTCP45Generator {
                             System.out.println("  ✓ Trade exists in TradeState");
                             Trade trade = tradeState.getTrade();
                             
-                            // Try to access Product directly from this Trade
-                            try {
-                                java.lang.reflect.Method getProductMethod = trade.getClass().getMethod("getProduct");
-                                Object product = getProductMethod.invoke(trade);
+                            // Test the CDM path from TradeState
+                            if (trade.getTradableProduct() != null) {
+                                System.out.println("  ✓ TradableProduct exists in TradeState.Trade");
                                 
-                                if (product != null) {
-                                    System.out.println("  🎉 FOUND PRODUCT via TradeState.Trade.getProduct()!");
-                                    System.out.println("  - Product Class: " + product.getClass().getSimpleName());
+                                if (trade.getTradableProduct().getProduct() != null) {
+                                    System.out.println("  🎉 FOUND PRODUCT via TradeState.Trade.getTradableProduct().getProduct()!");
+                                    System.out.println("  - Product Class: " + trade.getTradableProduct().getProduct().getClass().getSimpleName());
                                     
                                     // Analyze this product in detail
-                                    analyzeProductInDetail(product, "TradeState.Trade.getProduct()");
+                                    analyzeProductInDetail(trade.getTradableProduct().getProduct(), "TradeState.Trade.getTradableProduct().getProduct()");
                                     
                                 } else {
-                                    System.out.println("  ❌ TradeState.Trade.getProduct() returns NULL");
+                                    System.out.println("  ❌ TradeState.Trade.getTradableProduct().getProduct() returns NULL");
                                 }
-                            } catch (NoSuchMethodException e) {
-                                System.out.println("  ❌ TradeState.Trade.getProduct() method does not exist");
-                            } catch (Exception e) {
-                                System.out.println("  ❌ Error calling TradeState.Trade.getProduct(): " + e.getMessage());
+                            } else {
+                                System.out.println("  ❌ TradeState.Trade.getTradableProduct() returns NULL");
                             }
                         } else {
                             System.out.println("  ❌ Trade is NULL in TradeState");
@@ -482,56 +517,130 @@ public class CFTCP45Generator {
                 System.out.println("  ❌ OriginatingWorkflowStep is NULL");
             }
         } catch (Exception e) {
-            System.out.println("  ❌ Error in validation path 2: " + e.getMessage());
+            System.out.println("  ❌ Error in TradeState path: " + e.getMessage());
         }
         
-        // Path 3: Use reflection to find ALL methods that might return Product
-        System.out.println("\n[VALIDATION PATH 3] Reflection scan for Product-related methods");
+        // Path 3: Use reflection to find ALL product-related methods (Discovery Mode)
+        System.out.println("\n[VALIDATION PATH 3] CDM Trade Class Method Discovery");
         try {
             if (reportableEvent.getReportableTrade() != null && reportableEvent.getReportableTrade().getTrade() != null) {
                 Trade trade = reportableEvent.getReportableTrade().getTrade();
                 
-                System.out.println("  Scanning Trade class for product-related methods:");
+                System.out.println("  Scanning Trade class for ALL available methods:");
                 java.lang.reflect.Method[] methods = trade.getClass().getMethods();
                 
+                // List all getter methods to see what's available
+                System.out.println("  ");
+                System.out.println("  === ALL TRADE METHODS === ");
                 for (java.lang.reflect.Method method : methods) {
-                    String methodName = method.getName().toLowerCase();
-                    String returnType = method.getReturnType().getSimpleName().toLowerCase();
-                    
-                    // Look for methods that might return product information
-                    if ((methodName.contains("product") || methodName.contains("contract") || 
-                         returnType.contains("product") || returnType.contains("contract")) && 
-                        method.getParameterCount() == 0) { // Only no-argument methods
+                    if (method.getName().startsWith("get") && method.getParameterCount() == 0) {
+                        System.out.println("    → " + method.getName() + "() → " + method.getReturnType().getSimpleName());
+                    }
+                }
+                System.out.println("  ========================");
+                
+                // Now specifically test important CDM methods
+                System.out.println("\n  Testing key CDM methods:");
+                
+                // Test getTradableProduct()
+                try {
+                    Object tradableProduct = trade.getTradableProduct();
+                    if (tradableProduct != null) {
+                        System.out.println("    ✓ getTradableProduct() → " + tradableProduct.getClass().getSimpleName());
                         
-                        System.out.println("    → Found method: " + method.getName() + "() → " + method.getReturnType().getSimpleName());
-                        
-                        try {
-                            Object result = method.invoke(trade);
-                            if (result != null) {
-                                System.out.println("      🎉 Method returns NON-NULL value!");
-                                System.out.println("      - Result Class: " + result.getClass().getSimpleName());
-                                
-                                // If this looks like a product, analyze it
-                                if (result.getClass().getSimpleName().toLowerCase().contains("product") ||
-                                    result.getClass().getSimpleName().toLowerCase().contains("contract")) {
-                                    analyzeProductInDetail(result, "Trade." + method.getName() + "()");
-                                }
-                            } else {
-                                System.out.println("      ❌ Method returns NULL");
-                            }
-                        } catch (Exception e) {
-                            System.out.println("      ❌ Error calling method: " + e.getMessage());
+                        // Test getProduct() on TradableProduct
+                        java.lang.reflect.Method getProductMethod = tradableProduct.getClass().getMethod("getProduct");
+                        Object product = getProductMethod.invoke(tradableProduct);
+                        if (product != null) {
+                            System.out.println("    🎉 getTradableProduct().getProduct() → " + product.getClass().getSimpleName());
+                            analyzeProductInDetail(product, "getTradableProduct().getProduct()");
+                        } else {
+                            System.out.println("    ❌ getTradableProduct().getProduct() returns NULL");
                         }
+                    } else {
+                        System.out.println("    ❌ getTradableProduct() returns NULL");
+                    }
+                } catch (Exception e) {
+                    System.out.println("    ❌ Error testing getTradableProduct(): " + e.getMessage());
+                }
+                
+                // Test other potential product-related methods
+                String[] testMethods = {"getTradeIdentifier", "getTradeDate", "getParty", "getExecution", "getContractDetails"};
+                for (String methodName : testMethods) {
+                    try {
+                        java.lang.reflect.Method method = trade.getClass().getMethod(methodName);
+                        Object result = method.invoke(trade);
+                        if (result != null) {
+                            System.out.println("    ✓ " + methodName + "() → " + result.getClass().getSimpleName());
+                        } else {
+                            System.out.println("    ❌ " + methodName + "() returns NULL");
+                        }
+                    } catch (NoSuchMethodException e) {
+                        System.out.println("    ❌ " + methodName + "() method does not exist");
+                    } catch (Exception e) {
+                        System.out.println("    ❌ Error calling " + methodName + "(): " + e.getMessage());
                     }
                 }
             }
         } catch (Exception e) {
-            System.out.println("  ❌ Error in reflection scan: " + e.getMessage());
+            System.out.println("  ❌ Error in method discovery: " + e.getMessage());
+        }
+        
+        // Path 4: Extract EventType and other DRR fields
+        System.out.println("\n[VALIDATION PATH 4] Extract EventType and DRR Fields");
+        try {
+            extractEventTypeFromReportableEvent(reportableEvent);
+        } catch (Exception e) {
+            System.out.println("  ❌ Error extracting EventType: " + e.getMessage());
         }
         
         System.out.println("\nProduct validation completed.");
     }
     
+    // New method to extract EventType for DRR
+    private void extractEventTypeFromReportableEvent(ReportableEvent reportableEvent) {
+        System.out.println("  Extracting EventType for DRR fields...");
+        
+        try {
+            // Check ReportableInformation for action type
+            if (reportableEvent.getReportableInformation() != null) {
+                System.out.println("    ✓ ReportableInformation exists");
+                
+                if (reportableEvent.getReportableInformation().getReportableAction() != null) {
+                    System.out.println("    ✓ ReportableAction: " + reportableEvent.getReportableInformation().getReportableAction());
+                }
+            }
+            
+            // Check OriginatingWorkflowStep for action and intent
+            if (reportableEvent.getOriginatingWorkflowStep() != null) {
+                System.out.println("    ✓ OriginatingWorkflowStep exists");
+                
+                if (reportableEvent.getOriginatingWorkflowStep().getAction() != null) {
+                    System.out.println("    ✓ WorkflowStep Action: " + reportableEvent.getOriginatingWorkflowStep().getAction());
+                }
+                
+                if (reportableEvent.getOriginatingWorkflowStep().getBusinessEvent() != null) {
+                    System.out.println("    ✓ BusinessEvent exists");
+                    
+                    if (reportableEvent.getOriginatingWorkflowStep().getBusinessEvent().getIntent() != null) {
+                        System.out.println("    ✓ BusinessEvent Intent: " + reportableEvent.getOriginatingWorkflowStep().getBusinessEvent().getIntent());
+                    }
+                    
+                    if (!reportableEvent.getOriginatingWorkflowStep().getBusinessEvent().getInstruction().isEmpty()) {
+                        System.out.println("    ✓ Instructions exist: " + reportableEvent.getOriginatingWorkflowStep().getBusinessEvent().getInstruction().size());
+                        // You can map these to DRR EventType:
+                        // - Intent = CONTRACT_FORMATION → EventType = "TRAD"
+                        // - Intent = CONTRACT_TERMINATION → EventType = "TERM"
+                        // - Intent = CONTRACT_TERMS_AMENDMENT → EventType = "MODI"
+                    }
+                }
+            }
+            
+        } catch (Exception e) {
+            System.out.println("    ❌ Error extracting EventType: " + e.getMessage());
+        }
+    }
+
     private void analyzeProductInDetail(Object product, String extractionPath) {
         System.out.println("\n    === DETAILED PRODUCT ANALYSIS ===");
         System.out.println("    Extraction Path: " + extractionPath);
@@ -813,6 +922,41 @@ public class CFTCP45Generator {
         if (cdmObject instanceof WorkflowStep) {
             WorkflowStep workflowStep = (WorkflowStep) cdmObject;
             System.out.println("[OK] Object is a WorkflowStep");
+            
+            // CORRECTED: The JSON structure has "originatingWorkflowStep" containing the WorkflowStep
+            // But we're loading the top-level object which IS the OriginatingWorkflowStep
+            // Let's check what we actually have
+            
+            System.out.println("\nChecking WorkflowStep structure:");
+            try {
+                // Print the JSON structure to see what we have
+                String workflowStepJson = RosettaObjectMapper.getNewRosettaObjectMapper()
+                    .writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(workflowStep);
+                   
+                // Check first 500 characters to see structure
+                System.out.println("WorkflowStep JSON (first 500 chars):");
+                System.out.println(workflowStepJson.substring(0, Math.min(500, workflowStepJson.length())));
+                System.out.println("... (truncated)");
+                
+                // Check for specific fields
+                if (workflowStepJson.contains("originatingWorkflowStep")) {
+                    System.out.println("[INFO] Contains 'originatingWorkflowStep' field");
+                }
+                if (workflowStepJson.contains("businessEvent")) {
+                    System.out.println("[INFO] Contains 'businessEvent' field");
+                }
+                if (workflowStepJson.contains("tradableProduct")) {
+                    System.out.println("[INFO] Contains 'tradableProduct' field");
+                }
+                if (workflowStepJson.contains("contractualProduct")) {
+                    System.out.println("[INFO] Contains 'contractualProduct' field");
+                }
+                
+            } catch (Exception e) {
+                System.out.println("[ERROR] Could not serialize WorkflowStep: " + e.getMessage());
+            }
+            
             analyzeWorkflowStep(workflowStep);
         }
         // Check if it's a BusinessEvent
@@ -835,6 +979,22 @@ public class CFTCP45Generator {
         }
         else {
             System.out.println("[WARN] Unknown CDM object type: " + cdmObject.getClass().getName());
+            
+            // Use reflection to see available methods
+            System.out.println("Available methods:");
+            java.lang.reflect.Method[] methods = cdmObject.getClass().getMethods();
+            for (java.lang.reflect.Method method : methods) {
+                if (method.getName().startsWith("get") && method.getParameterCount() == 0) {
+                    try {
+                        Object result = method.invoke(cdmObject);
+                        if (result != null) {
+                            System.out.println("  → " + method.getName() + "() → " + result.getClass().getSimpleName());
+                        }
+                    } catch (Exception ignored) {
+                        // Skip methods that fail
+                    }
+                }
+            }
         }
         
         System.out.println("=========================");
