@@ -1,0 +1,31 @@
+Certainly! Here's a professional and concise draft focusing on the core issue:
+
+---
+
+**Subject:** Access Issue with DRR GitHub Repository Due to SSO Conflict
+
+Dear \[Recipient's Name],
+
+I hope you're doing well.
+
+I’m reaching out regarding access to the private DRR GitHub repository:
+[https://github.com/rosetta-models/digital-regulatory-reporting](https://github.com/rosetta-models/digital-regulatory-reporting)
+
+I’ve already raised an access request for my email ID and was advised to create a GitHub username for repository access. Accordingly, I created the username **snanduri93**.
+
+However, I’m currently facing access issues within the bank environment due to GitHub's SSO enforcement. Our organization uses SSO-based GitHub access, which automatically generates a different profile under the username **saisandeep-nanduri\_boa**. As a result, I am unable to access the repository using the originally approved username.
+
+Would it be possible to either:
+
+* Extend access permissions to my SSO-linked GitHub account (**saisandeep-nanduri\_boa**),
+  or
+* Advise on how to align access with our SSO setup?
+
+Appreciate your help in resolving this so I can proceed with the work.
+
+Best regards,
+Sandeep Nanduri
+
+---
+
+Let me know if you want to make this more formal or include someone in CC.
